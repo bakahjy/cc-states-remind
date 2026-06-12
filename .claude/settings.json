@@ -1,0 +1,21 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"E:/code/cc_states_remind/hooks/permission_toast.py\""
+          }
+        ]
+      }
+    ]
+  },
+  "env": {
+    "CCTOAST_TIMEOUT": "30",
+    "CCTOAST_WATCHED_TOOLS": "Bash,Write,Edit",
+    "CCTOAST_SESSION_TTL": "180",
+    "CCTOAST_THEME": "dark"
+  }
+}

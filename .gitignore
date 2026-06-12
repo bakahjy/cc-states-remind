@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Claude Code
+.claude/settings.local.json
+.claude/cctoast-session.json
+.claude/history/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Superpowers (tool caches)
+.superpowers/
+
+# OS
+Thumbs.db
+.DS_Store
