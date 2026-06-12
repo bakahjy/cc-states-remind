@@ -42,13 +42,36 @@ A `PreToolUse` hook that shows a GUI confirmation toast at the screen bottom-rig
 
 1. Claude Code is about to call a tool (Bash, Write, or Edit).
 2. The `PreToolUse` hook invokes `permission_toast.py`.
-3. If the exact tool+command was previously "Session Allowed", the hook exits 0 immediately.
+3. If the exact tool+command was previously "Session Allowed", the hook outputs JSON `{permissionDecision: "allow"}` and exits 0 — **this suppresses the native permission prompt**.
 4. Otherwise, a Tkinter window appears at the **screen bottom-right**.
 5. User picks:
-   - **Allow Once** — allow this single operation
-   - **Allow Session** — allow for the remainder of this session (3h TTL)
-   - **Reject** — block the operation
-   - *Timeout* (30s) — fallback to Claude Code's own terminal prompt (y/n)
+   - **Allow Once** — hook outputs JSON `{permissionDecision: "allow"}` → **no native prompt**
+   - **Allow Session** — same + saves to session cache → **no native prompt**
+   - **Reject** — hook outputs JSON `{permissionDecision: "deny"}` → tool blocked
+   - *Timeout* (30s) — `exit 1` → falls through to Claude Code's own terminal prompt (y/n)
+
+### ⚠️ Key Insight: Why Toast + CLI Prompt?
+
+The old version used only bare exit codes:
+
+| Exit code | What Claude Code does |
+|-----------|-----------------------|
+| `exit 0` (no stdout JSON) | "Hook has no opinion" → **native permission prompt still fires** |
+| `exit 2` | Veto — tool blocked |
+
+To **suppress** the native permission prompt, the hook must return structured JSON on stdout:
+
+```json
+{
+  "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
+    "permissionDecision": "allow",
+    "permissionDecisionReason": "User approved Bash"
+  }
+}
+```
+
+This is what the current version does — Allow Once / Allow Session now truly prevent the CLI from re-asking.
 
 ## Requirements
 

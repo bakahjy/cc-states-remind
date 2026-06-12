@@ -2,9 +2,13 @@
 """Claude Code PreToolUse hook — permission toast for Bash/Write/Edit.
 
 stdin: JSON with {tool, input, cwd, user}
-exit 0 → allow
-exit 1 → timeout (fallback to Claude's own prompt)
-exit 2 → deny
+exit 0 with JSON on stdout → explicit allow/deny (suppresses native prompt)
+exit 2 → veto (blocks tool call, stderr shown to Claude)
+
+On timeout → exit 1 → Claude falls through to its own permission prompt.
+
+Key insight: exit 0 WITHOUT JSON means "no opinion" — native prompt still fires.
+To suppress it, output structured JSON with permissionDecision.
 """
 
 from __future__ import annotations
@@ -23,6 +27,26 @@ if _HOOKS_PARENT not in sys.path:
 from hooks.config import SETTINGS
 from hooks.session_cache import add_allowed, is_allowed
 from hooks.toast_window import show_toast
+
+
+def _exit_with_decision(
+    decision: str,
+    reason: str = "",
+) -> None:
+    """Print structured JSON to stdout and exit 0.
+
+    Claude Code reads the JSON and uses permissionDecision to decide
+    whether to suppress the native permission prompt.
+    """
+    payload = {
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": decision,
+            "permissionDecisionReason": reason,
+        },
+    }
+    print(json.dumps(payload))
+    sys.exit(0)
 
 
 def main() -> None:
@@ -46,7 +70,7 @@ def main() -> None:
         command = tool_input
     cwd: str = event.get("cwd", "")
 
-    # Only watch specific tools
+    # Only watch specific tools — unwatched tools get no opinion
     if not SETTINGS.is_tool_watched(tool):
         sys.exit(0)
 
@@ -54,9 +78,9 @@ def main() -> None:
     if not command:
         sys.exit(0)
 
-    # Check session cache
+    # Check session cache — auto-allow if cached
     if command and is_allowed(tool, command, cwd):
-        sys.exit(0)
+        _exit_with_decision("allow", f"Session-cached approval for {tool}")
 
     # Show toast
     choice = show_toast(
@@ -70,10 +94,14 @@ def main() -> None:
     if choice == "allow_session" and command:
         add_allowed(tool, command, cwd)
 
-    # Exit code: 0 = allow, 1 = timeout (fallback to CLI), 2 = deny
+    # Map choice to permission decision
     if choice == "timeout":
+        # Timeout: no explicit decision → fall back to Claude's own prompt
         sys.exit(1)
-    sys.exit(0 if choice in ("allow_once", "allow_session") else 2)
+    elif choice in ("allow_once", "allow_session"):
+        _exit_with_decision("allow", f"User approved {tool}")
+    else:
+        _exit_with_decision("deny", f"User rejected {tool}")
 
 
 if __name__ == "__main__":
