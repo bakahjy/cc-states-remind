@@ -4,7 +4,7 @@ Cache file location: <project>/.claude/cctoast-session.json
 
 JSON schema:
 {
-  "allowed_commands": ["ToolName|command_text..."],
+  "allowed_commands": ["ToolName", ...],
   "expires_at": 1234567890.0
 }
 
@@ -51,7 +51,11 @@ def _now() -> float:
 
 
 def is_allowed(tool: str, command: str, cwd: str) -> bool:
-    """Return True if tool+command was session-allowed (prefix match)."""
+    """Return True if this tool type was session-allowed.
+
+    Cache is keyed by tool name only — "Allow Session" for any Write
+    auto-allows all subsequent Write operations in this session.
+    """
     path = _cache_path(cwd)
     if not os.path.isfile(path):
         return False
@@ -69,14 +73,7 @@ def is_allowed(tool: str, command: str, cwd: str) -> bool:
             pass
         return False
 
-    command = command.strip()
-    for key in data.get("allowed_commands", []):
-        if not key.startswith(tool + "|"):
-            continue
-        cached = key[len(tool) + 1:]
-        if command == cached or command.startswith(cached + " "):
-            return True
-    return False
+    return tool in data.get("allowed_commands", [])
 
 
 def add_allowed(tool: str, command: str, cwd: str) -> None:
@@ -105,5 +102,5 @@ def add_allowed(tool: str, command: str, cwd: str) -> None:
 
 
 def _make_key(tool: str, command: str) -> str:
-    """Normalise cache key — first MAX_KEY_LENGTH chars of command."""
-    return f"{tool}|{command.strip()[:MAX_KEY_LENGTH]}"
+    """Normalise cache key — tool name only (any command matches)."""
+    return tool
