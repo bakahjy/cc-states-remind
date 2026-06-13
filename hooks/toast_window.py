@@ -9,6 +9,7 @@ Design decisions:
 from __future__ import annotations
 
 import tkinter as tk
+from tkinter import font as tkfont
 from typing import Literal
 
 ToastResult = Literal["deny", "allow_once", "allow_session", "timeout"]
@@ -45,6 +46,13 @@ def show_toast(
     LABEL_COLOR = "#888888"
 
     win.configure(bg=BG)
+
+    # -- CJK-aware code font --
+    try:
+        win.tk.eval('font create cctoast_code -family {Consolas DengXian {Microsoft YaHei}} -size 11')
+    except tk.TclError:
+        pass
+    _CJK_FONT = "cctoast_code"
 
     # ── Drag support ──
     _drag_data = {"x": 0, "y": 0}
@@ -126,7 +134,7 @@ def show_toast(
         text=("…" + cwd[-60:] if len(cwd) > 60 else cwd),
         fg=LABEL_COLOR,
         bg=BG,
-        font=("Segoe UI", 9),
+        font=_CJK_FONT,
     )
     dir_val.pack(side="left")
 
@@ -139,7 +147,7 @@ def show_toast(
         card,
         fg=CODE_COLOR,
         bg=CARD_BG,
-        font=("Consolas", 11),
+        font=_CJK_FONT,
         wrap="word",
         relief="flat",
         bd=0,
@@ -257,6 +265,10 @@ def show_toast(
         tid = getattr(w, "_timeout_id", None)
         if tid:
             w.after_cancel(tid)
+        try:
+            w.tk.eval("catch {font delete cctoast_code}")
+        except tk.TclError:
+            pass
         w.destroy()
 
     # ── Dynamic window height ──

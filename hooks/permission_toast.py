@@ -17,6 +17,12 @@ import json
 import sys
 from pathlib import Path
 
+# ── Force UTF-8 on stdout for reliable JSON pipe to Claude Code ──
+# On Windows the console encoding (cp936/cp1252) can mangle output when
+# captured by a non-console pipe.  Explicit UTF-8 avoids that entirely.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 # Ensure the parent of hooks/ is on sys.path so that "from hooks.X import Y"
 # works both when run as `python hooks/permission_toast.py` and when invoked
 # by Claude Code's hook runner (which adds the hooks dir to sys.path).
@@ -37,6 +43,10 @@ def _exit_with_decision(
 
     Claude Code reads the JSON and uses permissionDecision to decide
     whether to suppress the native permission prompt.
+
+    The authoritative format (per Claude Code hook docs) is:
+      {"hookSpecificOutput": {"hookEventName":"PreToolUse",
+                              "permissionDecision":"allow|deny", …}}
     """
     payload = {
         "hookSpecificOutput": {
@@ -45,13 +55,19 @@ def _exit_with_decision(
             "permissionDecisionReason": reason,
         },
     }
-    print(json.dumps(payload))
+    # Use binary write to bypass any encoding issues on Windows pipes.
+    # Python's text-mode print() can mangle non-ASCII on cp936/cp1252;
+    # writing UTF-8 bytes directly is bulletproof.
+    sys.stdout.buffer.write(json.dumps(payload, ensure_ascii=True).encode("utf-8"))
+    sys.stdout.buffer.write(b"\n")
+    sys.stdout.buffer.flush()
     sys.exit(0)
 
 
 def main() -> None:
     # Read stdin JSON
-    raw = sys.stdin.read().strip()
+    raw_bytes = sys.stdin.buffer.read()
+    raw = raw_bytes.decode("utf-8").strip()
     if not raw:
         # No input → no-op allow
         sys.exit(0)
@@ -60,7 +76,7 @@ def main() -> None:
     except json.JSONDecodeError:
         sys.exit(0)
 
-    tool: str = event.get("tool_name", event.get("tool", ""))
+    tool: str = event.get("tool_name") or event.get("tool") or ""
     tool_input = event.get("tool_input", {})
     # Bash passes command as tool_input.command; other tools may vary
     command: str = ""
